@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8" />
+  <title>AR кулька з WebXR</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { margin: 0; overflow: hidden; }
+    canvas { display: block; }
+  </style>
+</head>
+<body>
+  <script type="module">
+    import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
+    import { ARButton } from 'https://unpkg.com/three@0.160.0/examples/jsm/webxr/ARButton.js';
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.xr.enabled = true;
+    document.body.appendChild(renderer.domElement);
+
+    document.body.appendChild(ARButton.createButton(renderer, { requiredFeatures: ['hit-test'] }));
+
+    const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1);
+    scene.add(light);
+
+    let sphere, plane;
+    let hitTestSource = null;
+    let localSpace = null;
+    let hasPlaced = false;
+
+    // Гумова кулька
+    const radius = 0.1;
+    let vx = 0, vy = 0;
+    const gravity = 9.81;
+    const incline = Math.PI / 8;
+    const damping = 0.6;
+
+    const createObjects = (position) => {
+      plane = new THREE.Mesh(
+        new THREE.PlaneGeometry(1, 1),
+        new THREE.MeshStandardMaterial({ color: 0x808080 })
+      );
+      plane.rotation.x = -incline;
+      plane.position.copy(position);
+      scene.add(plane);
+
+      sphere = new THREE.Mesh(
+        new THREE.SphereGeometry(radius, 32, 16),
+        new THREE.MeshStandardMaterial({ color: 0xff0000 })
+      );
+      sphere.position.set(position.x, position.y + 0.3, position.z);
+      scene.add(sphere);
+    };
+
+    const animateBall = (delta) => {
+      if (!sphere || !plane) return;
+
+      const accel = gravity * Math.sin(incline);
+      vy -= gravity * Math.cos(incline) * delta;
+      vx += accel * delta;
+
+      sphere.position.x += vx * delta;
+      sphere.position.y += vy * delta;
+
+      const groundY = plane.position.y + Math.tan(incline) * (sphere.position.x - plane.position.x);
+      if (sphere.position.y - radius < groundY) {
+        sphere.position.y = groundY + radius;
+        vy = -vy * damping;
+        vx *= damping;
+
+        if (Math.abs(vy) < 0.01) vy = 0;
+        if (Math.abs(vx) < 0.01) vx = 0;
+      }
+    };
+
+    renderer.setAnimationLoop((timestamp, frame) => {
+      const delta = renderer.xr.isPresenting ? renderer.xr.getSession().inputSources[0] ? 0.016 : 0 : 0.016;
+
+      if (frame && !hasPlaced) {
+        const refSpace = renderer.xr.getReferenceSpace();
+        const viewerPose = frame.getViewerPose(refSpace);
+
+        if (!hitTestSource) {
+          frame.session.requestReferenceSpace('viewer').then((space) => {
+            localSpace = space;
+            frame.session.requestHitTestSource({ space: localSpace }).then((source) => {
+              hitTestSource = source;
+            });
+          });
+        }
+
+        if (hitTestSource && viewerPose) {
+          const hits = frame.getHitTestResults(hitTestSource);
+          if (hits.length > 0) {
+            const hit = hits[0];
+            const hitPose = hit.getPose(refSpace);
+            createObjects(hitPose.transform.position);
+            hasPlaced = true;
+          }
+        }
+      }
+
+      animateBall(delta);
+      renderer.render(scene, camera);
+    });
+  </script>
+</body>
+</html>
