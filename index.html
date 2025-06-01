@@ -2,110 +2,98 @@
 <html lang="uk">
 <head>
   <meta charset="UTF-8" />
-  <title>AR кулька з WebXR</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Гумова кулька з MindAR маркером NBA</title>
   <style>
-    body { margin: 0; overflow: hidden; }
-    canvas { display: block; }
+    body { margin: 0; overflow: hidden; background: black; }
+    #instructions {
+      position: absolute;
+      top: 10px; left: 50%; transform: translateX(-50%);
+      color: white;
+      font-family: sans-serif;
+      background: rgba(0,0,0,0.5);
+      padding: 8px 12px;
+      border-radius: 6px;
+      user-select: none;
+      z-index: 1;
+    }
   </style>
 </head>
 <body>
+  <div id="instructions">Наведіть камеру на маркер NBA</div>
+
   <script type="module">
-    import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
-    import { ARButton } from 'https://unpkg.com/three@0.160.0/examples/jsm/webxr/ARButton.js';
+    import { MindARThree } from 'https://cdn.jsdelivr.net/npm/mind-ar@1.2.0/dist/mindar-three.prod.js';
+    import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
 
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.xr.enabled = true;
-    document.body.appendChild(renderer.domElement);
+    const inclineAngle = Math.PI / 6; // 30 градусів
+    const gravity = 0.002;
+    const ballRadius = 0.1;
+    let velocity = new THREE.Vector3(0, 0, 0);
 
-    document.body.appendChild(ARButton.createButton(renderer, { requiredFeatures: ['hit-test'] }));
+    let mindarThree, scene, camera, renderer;
+    let ball, plane;
+    
+    async function start() {
+      mindarThree = new MindARThree({
+        container: document.body,
+        imageTargetSrc: './marker.mind',
+        uiLoading: "Завантаження...",
+        uiScanning: "Наведіть камеру на маркер NBA",
+        uiError: "Маркер не знайдено",
+      });
 
-    const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1);
-    scene.add(light);
+      ({ renderer, scene, camera } = mindarThree);
 
-    let sphere, plane;
-    let hitTestSource = null;
-    let localSpace = null;
-    let hasPlaced = false;
+      // Група прив’язана до маркера №0
+      const anchor = mindarThree.addAnchor(0);
 
-    // Гумова кулька
-    const radius = 0.1;
-    let vx = 0, vy = 0;
-    const gravity = 9.81;
-    const incline = Math.PI / 8;
-    const damping = 0.6;
+      // Площина похила
+      const planeGeometry = new THREE.PlaneGeometry(2, 2);
+      const planeMaterial = new THREE.MeshStandardMaterial({ color: 0x808080, side: THREE.DoubleSide });
+      plane = new THREE.Mesh(planeGeometry, planeMaterial);
+      plane.rotation.x = -inclineAngle;
+      anchor.group.add(plane);
 
-    const createObjects = (position) => {
-      plane = new THREE.Mesh(
-        new THREE.PlaneGeometry(1, 1),
-        new THREE.MeshStandardMaterial({ color: 0x808080 })
-      );
-      plane.rotation.x = -incline;
-      plane.position.copy(position);
-      scene.add(plane);
+      // Кулька
+      const ballGeometry = new THREE.SphereGeometry(ballRadius, 32, 16);
+      const ballMaterial = new THREE.MeshStandardMaterial({ color: 0xff0000, roughness: 0.5, metalness: 0 });
+      ball = new THREE.Mesh(ballGeometry, ballMaterial);
+      ball.position.set(0, ballRadius + 0.5, 0);
+      anchor.group.add(ball);
 
-      sphere = new THREE.Mesh(
-        new THREE.SphereGeometry(radius, 32, 16),
-        new THREE.MeshStandardMaterial({ color: 0xff0000 })
-      );
-      sphere.position.set(position.x, position.y + 0.3, position.z);
-      scene.add(sphere);
-    };
+      // Світло
+      const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1);
+      scene.add(light);
 
-    const animateBall = (delta) => {
-      if (!sphere || !plane) return;
+      velocity.set(0, 0, 0);
 
-      const accel = gravity * Math.sin(incline);
-      vy -= gravity * Math.cos(incline) * delta;
-      vx += accel * delta;
+      await mindarThree.start();
+      renderer.setAnimationLoop(animate);
+    }
 
-      sphere.position.x += vx * delta;
-      sphere.position.y += vy * delta;
+    function animate() {
+      // Анімація тільки якщо маркер бачимо
+      if (mindarThree.controller.anchors[0].visible) {
+        // Рух кульки по похилій площині
+        const accelAlongIncline = gravity * Math.sin(inclineAngle);
 
-      const groundY = plane.position.y + Math.tan(incline) * (sphere.position.x - plane.position.x);
-      if (sphere.position.y - radius < groundY) {
-        sphere.position.y = groundY + radius;
-        vy = -vy * damping;
-        vx *= damping;
+        // Рух вперед по площині (ось X)
+        velocity.x = 0.01;
 
-        if (Math.abs(vy) < 0.01) vy = 0;
-        if (Math.abs(vx) < 0.01) vx = 0;
-      }
-    };
+        velocity.y -= accelAlongIncline;
 
-    renderer.setAnimationLoop((timestamp, frame) => {
-      const delta = renderer.xr.isPresenting ? renderer.xr.getSession().inputSources[0] ? 0.016 : 0 : 0.016;
+        ball.position.x += velocity.x;
+        ball.position.y += velocity.y;
 
-      if (frame && !hasPlaced) {
-        const refSpace = renderer.xr.getReferenceSpace();
-        const viewerPose = frame.getViewerPose(refSpace);
-
-        if (!hitTestSource) {
-          frame.session.requestReferenceSpace('viewer').then((space) => {
-            localSpace = space;
-            frame.session.requestHitTestSource({ space: localSpace }).then((source) => {
-              hitTestSource = source;
-            });
-          });
-        }
-
-        if (hitTestSource && viewerPose) {
-          const hits = frame.getHitTestResults(hitTestSource);
-          if (hits.length > 0) {
-            const hit = hits[0];
-            const hitPose = hit.getPose(refSpace);
-            createObjects(hitPose.transform.position);
-            hasPlaced = true;
-          }
+        if (ball.position.y <= ballRadius) {
+          ball.position.y = ballRadius;
+          velocity.y = -velocity.y; // абсолютно пружний удар
         }
       }
-
-      animateBall(delta);
       renderer.render(scene, camera);
-    });
+    }
+
+    start();
   </script>
 </body>
 </html>
