@@ -2,7 +2,7 @@
 <html lang="uk">
 <head>
   <meta charset="UTF-8" />
-  <title>Гумова кулька з MindAR маркером NBA</title>
+  <title>Гумова кулька з MindAR</title>
   <style>
     body {
       margin: 0;
@@ -28,12 +28,13 @@
 <body>
   <div id="instructions">Наведіть камеру на маркер NBA</div>
 
-  <script type="module">
-    import { MindARThree } from 'https://cdn.jsdelivr.net/npm/mind-ar@1.1.4/dist/mindar-image-three.prod.js';
-    import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+  <!-- MindAR + Three.js (без module) -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.1.4/dist/mindar-image-three.prod.js"></script>
 
+  <script>
     const inclineAngle = Math.PI / 6; // 30°
-    const gravity = 0.003; // трохи більше для візуального ефекту
+    const gravity = 0.003;
     const ballRadius = 0.1;
     let velocity = new THREE.Vector3();
 
@@ -41,23 +42,20 @@
     let ball, plane, anchor;
 
     async function start() {
-      mindarThree = new MindARThree({
+      mindarThree = new window.MINDAR.IMAGE.MindARThree({
         container: document.body,
         imageTargetSrc: './marker.mind',
-        uiLoading: "Завантаження...",
-        uiScanning: "Наведіть камеру на маркер NBA",
-        uiError: "Маркер не знайдено",
       });
 
       ({ renderer, scene, camera } = mindarThree);
-      renderer.setClearColor(0x000000, 0); // прозорий фон
+      renderer.setClearColor(0x000000, 0);
       renderer.xr.enabled = false;
 
       // Світло
       const light = new THREE.HemisphereLight(0xffffff, 0x444444, 1.2);
       scene.add(light);
 
-      // Прив'язка до маркера
+      // Прив’язка до маркера
       anchor = mindarThree.addAnchor(0);
 
       // Похила площина
@@ -71,7 +69,7 @@
       const ballGeometry = new THREE.SphereGeometry(ballRadius, 32, 16);
       const ballMaterial = new THREE.MeshStandardMaterial({ color: 0xff0000 });
       ball = new THREE.Mesh(ballGeometry, ballMaterial);
-      ball.position.set(-0.9, ballRadius + 0.01, 0); // початково зліва зверху
+      ball.position.set(-0.9, ballRadius + 0.01, 0);
       anchor.group.add(ball);
 
       velocity.set(0.005, 0, 0);
@@ -82,20 +80,17 @@
 
     function animate() {
       if (anchor && anchor.group.visible) {
-        // Рух кульки по осі Y (вниз по площині)
         const accelY = gravity * Math.sin(inclineAngle);
         velocity.y -= accelY;
 
         ball.position.x += velocity.x;
         ball.position.y += velocity.y;
 
-        // Відскок
         if (ball.position.y <= ballRadius) {
           ball.position.y = ballRadius;
-          velocity.y = -velocity.y * 0.7; // втрати енергії
+          velocity.y = -velocity.y * 0.7;
         }
 
-        // Обмеження за X, щоб кулька не "втікала"
         if (ball.position.x > 1) {
           ball.position.x = -0.9;
           velocity.set(0.005, 0, 0);
