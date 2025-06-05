@@ -4,13 +4,20 @@
   <meta charset="UTF-8" />
   <title>Гумова кулька з MindAR маркером NBA</title>
   <style>
-    body { margin: 0; overflow: hidden; background: black; }
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: black;
+    }
+
     #instructions {
       position: absolute;
-      top: 10px; left: 50%; transform: translateX(-50%);
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
       color: white;
       font-family: sans-serif;
-      background: rgba(0,0,0,0.5);
+      background: rgba(0, 0, 0, 0.5);
       padding: 8px 12px;
       border-radius: 6px;
       user-select: none;
@@ -25,14 +32,14 @@
     import { MindARThree } from 'https://cdn.jsdelivr.net/npm/mind-ar@1.2.0/dist/mindar-three.prod.js';
     import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
 
-    const inclineAngle = Math.PI / 6; // 30 градусів
-    const gravity = 0.002;
+    const inclineAngle = Math.PI / 6; // 30°
+    const gravity = 0.003; // трохи більше для візуального ефекту
     const ballRadius = 0.1;
-    let velocity = new THREE.Vector3(0, 0, 0);
+    let velocity = new THREE.Vector3();
 
     let mindarThree, scene, camera, renderer;
-    let ball, plane;
-    
+    let ball, plane, anchor;
+
     async function start() {
       mindarThree = new MindARThree({
         container: document.body,
@@ -43,53 +50,58 @@
       });
 
       ({ renderer, scene, camera } = mindarThree);
+      renderer.setClearColor(0x000000, 0); // прозорий фон
+      renderer.xr.enabled = false;
 
-      // Група прив’язана до маркера №0
-      const anchor = mindarThree.addAnchor(0);
+      // Світло
+      const light = new THREE.HemisphereLight(0xffffff, 0x444444, 1.2);
+      scene.add(light);
 
-      // Площина похила
+      // Прив'язка до маркера
+      anchor = mindarThree.addAnchor(0);
+
+      // Похила площина
       const planeGeometry = new THREE.PlaneGeometry(2, 2);
-      const planeMaterial = new THREE.MeshStandardMaterial({ color: 0x808080, side: THREE.DoubleSide });
+      const planeMaterial = new THREE.MeshStandardMaterial({ color: 0x888888, side: THREE.DoubleSide });
       plane = new THREE.Mesh(planeGeometry, planeMaterial);
       plane.rotation.x = -inclineAngle;
       anchor.group.add(plane);
 
       // Кулька
       const ballGeometry = new THREE.SphereGeometry(ballRadius, 32, 16);
-      const ballMaterial = new THREE.MeshStandardMaterial({ color: 0xff0000, roughness: 0.5, metalness: 0 });
+      const ballMaterial = new THREE.MeshStandardMaterial({ color: 0xff0000 });
       ball = new THREE.Mesh(ballGeometry, ballMaterial);
-      ball.position.set(0, ballRadius + 0.5, 0);
+      ball.position.set(-0.9, ballRadius + 0.01, 0); // початково зліва зверху
       anchor.group.add(ball);
 
-      // Світло
-      const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1);
-      scene.add(light);
-
-      velocity.set(0, 0, 0);
+      velocity.set(0.005, 0, 0);
 
       await mindarThree.start();
       renderer.setAnimationLoop(animate);
     }
 
     function animate() {
-      // Анімація тільки якщо маркер бачимо
-      if (mindarThree.controller.anchors[0].visible) {
-        // Рух кульки по похилій площині
-        const accelAlongIncline = gravity * Math.sin(inclineAngle);
-
-        // Рух вперед по площині (ось X)
-        velocity.x = 0.01;
-
-        velocity.y -= accelAlongIncline;
+      if (anchor && anchor.group.visible) {
+        // Рух кульки по осі Y (вниз по площині)
+        const accelY = gravity * Math.sin(inclineAngle);
+        velocity.y -= accelY;
 
         ball.position.x += velocity.x;
         ball.position.y += velocity.y;
 
+        // Відскок
         if (ball.position.y <= ballRadius) {
           ball.position.y = ballRadius;
-          velocity.y = -velocity.y; // абсолютно пружний удар
+          velocity.y = -velocity.y * 0.7; // втрати енергії
+        }
+
+        // Обмеження за X, щоб кулька не "втікала"
+        if (ball.position.x > 1) {
+          ball.position.x = -0.9;
+          velocity.set(0.005, 0, 0);
         }
       }
+
       renderer.render(scene, camera);
     }
 
