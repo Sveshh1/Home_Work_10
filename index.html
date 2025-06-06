@@ -2,130 +2,116 @@
 <html lang="uk">
 <head>
   <meta charset="UTF-8" />
-  <title>AR з геолокацією і маркером</title>
+  <title>Гумова кулька з MindAR</title>
   <style>
     body {
       margin: 0;
       overflow: hidden;
-      background: #000;
+      background: black;
     }
-    #instructions, #status {
+
+    #instructions {
       position: absolute;
+      top: 10px;
       left: 50%;
       transform: translateX(-50%);
+      color: white;
       font-family: sans-serif;
       background: rgba(0, 0, 0, 0.5);
-      color: white;
       padding: 8px 12px;
       border-radius: 6px;
-      z-index: 10;
-    }
-    #instructions {
-      top: 10px;
-    }
-    #status {
-      bottom: 10px;
-      color: #0f0;
+      user-select: none;
+      z-index: 1;
     }
   </style>
-
-  <!-- A-Frame + AR.js з підтримкою MindAR -->
-  <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.1.4/dist/aframe/mindar-image-aframe.prod.js"></script>
-  <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js/aframe/build/aframe-ar-nft.min.js"></script>
 </head>
 <body>
-  <div id="instructions">Наведіть камеру на marker.mind, щоб побачити 3D-моделі</div>
-  <div id="status">Очікуємо маркер...</div>
+  <div id="instructions">Наведіть камеру на маркер NBA</div>
 
-  <a-scene
-    mindar-image="imageTargetSrc: marker.mind; autoStart: true;"
-    embedded
-    vr-mode-ui="enabled: false"
-    device-orientation-permission-ui="enabled: true"
-    arjs="sourceType: webcam; debugUIEnabled: false;"
-  >
-    <!-- GPS-камера -->
-    <a-entity gps-camera rotation-reader></a-entity>
-
-    <!-- Контейнер, що буде активовано при виявленні маркера -->
-    <a-entity mindar-image-target="targetIndex: 0" visible="false" id="geo-container">
-      <!-- 3D-моделі, координати буде додано скриптом -->
-      <a-entity id="model-left"
-                gltf-model="https://cdn.jsdelivr.net/gh/KhronosGroup/glTF-Sample-Models@master/2.0/Duck/glTF/Duck.gltf"
-                scale="0.5 0.5 0.5"
-                rotation="0 180 0">
-      </a-entity>
-
-      <a-entity id="model-right"
-                gltf-model="https://cdn.jsdelivr.net/gh/KhronosGroup/glTF-Sample-Models@master/2.0/CesiumMan/glTF/CesiumMan.gltf"
-                scale="0.3 0.3 0.3"
-                rotation="0 180 0">
-      </a-entity>
-    </a-entity>
-  </a-scene>
+  <!-- MindAR + Three.js -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.1.4/dist/mindar-image-three.prod.js"></script>
 
   <script>
-    const R_EARTH = 6378137;
-    function metersToLatitudeDegrees(meters) {
-      return (meters / R_EARTH) * (180 / Math.PI);
-    }
-    function metersToLongitudeDegrees(meters, latitude) {
-      return (meters / (R_EARTH * Math.cos(latitude * Math.PI / 180))) * (180 / Math.PI);
+    const inclineAngle = Math.PI / 6; // 30°
+    const gravity = 0.003;
+    const ballRadius = 0.1;
+    let velocity = new THREE.Vector3();
+
+    let mindarThree, scene, camera, renderer;
+    let ball, plane, anchor;
+    let modelsAdded = false;
+
+    async function start() {
+      mindarThree = new window.MINDAR.IMAGE.MindARThree({
+        container: document.body,
+        imageTargetSrc: './marker.mind',
+      });
+
+      ({ renderer, scene, camera } = mindarThree);
+      renderer.setClearColor(0x000000, 0);
+      renderer.xr.enabled = false;
+
+      const light = new THREE.HemisphereLight(0xffffff, 0x444444, 1.2);
+      scene.add(light);
+
+      anchor = mindarThree.addAnchor(0);
+
+      // Додаємо обʼєкти тільки після розпізнавання маркера
+      anchor.onTargetFound = () => {
+        if (!modelsAdded) {
+          // Похила площина
+          const planeGeometry = new THREE.PlaneGeometry(2, 2);
+          const planeMaterial = new THREE.MeshStandardMaterial({ color: 0x888888, side: THREE.DoubleSide });
+          plane = new THREE.Mesh(planeGeometry, planeMaterial);
+          plane.rotation.x = -inclineAngle;
+          anchor.group.add(plane);
+
+          // Кулька
+          const ballGeometry = new THREE.SphereGeometry(ballRadius, 32, 16);
+          const ballMaterial = new THREE.MeshStandardMaterial({ color: 0xff0000 });
+          ball = new THREE.Mesh(ballGeometry, ballMaterial);
+          ball.position.set(-0.9, ballRadius + 0.01, 0);
+          anchor.group.add(ball);
+
+          velocity.set(0.005, 0, 0);
+          modelsAdded = true;
+
+          document.getElementById('instructions').innerText = 'Маркер знайдено!';
+        }
+      };
+
+      anchor.onTargetLost = () => {
+        document.getElementById('instructions').innerText = 'Наведіть камеру на маркер NBA';
+      };
+
+      await mindarThree.start();
+      renderer.setAnimationLoop(animate);
     }
 
-    function placeModelsAtGeoLocation() {
-      if (!navigator.geolocation) {
-        document.getElementById('status').innerText = 'Ваш браузер не підтримує геолокацію';
-        return;
+    function animate() {
+      if (anchor && anchor.group.visible && ball) {
+        const accelY = gravity * Math.sin(inclineAngle);
+        velocity.y -= accelY;
+
+        ball.position.x += velocity.x;
+        ball.position.y += velocity.y;
+
+        if (ball.position.y <= ballRadius) {
+          ball.position.y = ballRadius;
+          velocity.y = -velocity.y * 0.7;
+        }
+
+        if (ball.position.x > 1) {
+          ball.position.x = -0.9;
+          velocity.set(0.005, 0, 0);
+        }
       }
 
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const lat = position.coords.latitude;
-          const lon = position.coords.longitude;
-          const offsetMeters = 5;
-
-          const deltaLon = metersToLongitudeDegrees(offsetMeters, lat);
-          const deltaLat = metersToLatitudeDegrees(0);
-
-          const leftLat = lat + deltaLat;
-          const leftLon = lon - deltaLon;
-          const rightLat = lat + deltaLat;
-          const rightLon = lon + deltaLon;
-
-          const modelLeft = document.getElementById('model-left');
-          modelLeft.setAttribute('gps-entity-place', `latitude: ${leftLat}; longitude: ${leftLon};`);
-
-          const modelRight = document.getElementById('model-right');
-          modelRight.setAttribute('gps-entity-place', `latitude: ${rightLat}; longitude: ${rightLon};`);
-
-          document.getElementById('status').innerText = 'Моделі завантажено — вони зʼявляться біля вас!';
-        },
-        (err) => {
-          document.getElementById('status').innerText = 'Помилка геолокації: ' + err.message;
-        },
-        {
-          enableHighAccuracy: true,
-          maximumAge: 0,
-          timeout: 10000
-        }
-      );
+      renderer.render(scene, camera);
     }
 
-    // Коли маркер виявлено — показуємо контейнер і викликаємо геолокацію
-    document.addEventListener("DOMContentLoaded", () => {
-      const geoContainer = document.querySelector('#geo-container');
-      geoContainer.addEventListener('targetFound', () => {
-        geoContainer.setAttribute('visible', 'true');
-        document.getElementById('instructions').innerText = 'Маркер знайдено. Завантажуємо моделі...';
-        placeModelsAtGeoLocation();
-      });
-      geoContainer.addEventListener('targetLost', () => {
-        geoContainer.setAttribute('visible', 'false');
-        document.getElementById('status').innerText = 'Маркер втрачено';
-      });
-    });
+    start();
   </script>
 </body>
 </html>
