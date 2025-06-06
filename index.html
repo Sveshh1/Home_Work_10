@@ -100,7 +100,7 @@
           const userLat = position.coords.latitude;
           const userLon = position.coords.longitude;
           document.getElementById('instructions').innerText = 'Геолокацію знайдено. Завантажуємо моделі...';
-          document.getElementById('status').innerText = Ваша позиція: ${userLat.toFixed(6)}, ${userLon.toFixed(6)};
+          document.getElementById('status').innerText = `Ваша позиція: ${userLat.toFixed(6)}, ${userLon.toFixed(6)}`;
 
           // Відстань (в метрах), на яку змістимо модель вліво/вправо
           const offsetMeters = 5; // 5 метрів
@@ -119,13 +119,13 @@
 
           // 7) Присвоюємо атрибути gps-entity-place обом моделям
           const modelLeft = document.getElementById('model-left');
-          modelLeft.setAttribute('gps-entity-place', latitude: ${leftLat}; longitude: ${leftLon};);
+          modelLeft.setAttribute('gps-entity-place', `latitude: ${leftLat}; longitude: ${leftLon};`);
           modelLeft.addEventListener('loaded', () => {
             console.log('Модель LEFT завантажена та розташована за:', leftLat, leftLon);
           });
 
           const modelRight = document.getElementById('model-right');
-          modelRight.setAttribute('gps-entity-place', latitude: ${rightLat}; longitude: ${rightLon};);
+          modelRight.setAttribute('gps-entity-place', `latitude: ${rightLat}; longitude: ${rightLon};`);
           modelRight.addEventListener('loaded', () => {
             console.log('Модель RIGHT завантажена та розташована за:', rightLat, rightLon);
           });
