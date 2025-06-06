@@ -2,138 +2,117 @@
 <html lang="uk">
 <head>
   <meta charset="UTF-8" />
-  <title>Геокоординатна AR: дві моделі ліворуч та праворуч</title>
+  <title>AR з marker.mind та геомоделями</title>
   <style>
     body {
       margin: 0;
       overflow: hidden;
       background: #000;
     }
-    #instructions {
+    #instructions, #status {
       position: absolute;
-      top: 10px;
       left: 50%;
       transform: translateX(-50%);
-      color: white;
       font-family: sans-serif;
       background: rgba(0, 0, 0, 0.5);
       padding: 8px 12px;
       border-radius: 6px;
       user-select: none;
       z-index: 1;
+      color: white;
+    }
+    #instructions {
+      top: 10px;
     }
     #status {
-      position: absolute;
       bottom: 10px;
-      left: 50%;
-      transform: translateX(-50%);
       color: #0f0;
-      font-family: sans-serif;
-      background: rgba(0, 0, 0, 0.5);
-      padding: 6px 10px;
-      border-radius: 6px;
-      user-select: none;
-      z-index: 1;
     }
   </style>
-  <!-- 1) Підключаємо A-Frame -->
   <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
-  <!-- 2) Підключаємо AR.js з GPS-підтримкою -->
   <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js/aframe/build/aframe-ar-nft.min.js"></script>
 </head>
 <body>
-  <div id="instructions">Очікуємо позицію... будь ласка, дозвольте доступ до геолокації</div>
+  <div id="instructions">Очікуємо позицію... Дозвольте доступ до геолокації та наведіть камеру на marker.mind</div>
   <div id="status"></div>
 
-  <!-- 3) Сама AR.js-сцена -->
   <a-scene
     vr-mode-ui="enabled: false"
     embedded
-    arjs="sourceType: webcam; gpsMinDistance: 1; debugUIEnabled: false;"
+    arjs="sourceType: webcam; gpsMinDistance: 1; trackingMethod: best;"
   >
-    <!-- 4) GPS-камера — отримуємо позицію користувача автоматично -->
+    <!-- GPS-камера -->
     <a-entity gps-camera rotation-reader></a-entity>
 
-    <!-- 5) Дві умовні 3D-моделі, пізніше буде виставлено коректні lat/long -->
-    <a-entity id="model-left"
-              gltf-model="https://cdn.jsdelivr.net/gh/KhronosGroup/glTF-Sample-Models@master/2.0/Duck/glTF/Duck.gltf"
-              scale="0.5 0.5 0.5"
-              rotation="0 180 0"
-              position="-1 0 -3">
-      <!-- Атрибут gps-entity-place буде призначений скриптом нижче -->
-    </a-entity>
+    <!-- NFT-маркер -->
+    <a-nft
+      type="nft"
+      url="marker/marker"
+      smooth="true"
+      smoothCount="10"
+      smoothTolerance="0.01"
+      smoothThreshold="5"
+      id="mind-marker"
+    >
+      <!-- Контейнер, в який додамо моделі після геопозиціювання -->
+      <a-entity id="model-container"></a-entity>
+    </a-nft>
 
-    <a-entity id="model-right"
-              gltf-model="https://cdn.jsdelivr.net/gh/KhronosGroup/glTF-Sample-Models@master/2.0/CesiumMan/glTF/CesiumMan.gltf"
-              scale="0.3 0.3 0.3"
-              rotation="0 180 0"
-              position="1 0 -3">
-      <!-- Атрибут gps-entity-place буде призначений скриптом нижче -->
-    </a-entity>
+    <!-- Обов’язково: щоб камера запускалася -->
+    <a-entity camera></a-entity>
   </a-scene>
 
   <script>
-    // ----- Додаткові утиліти для обчислення "метрів у градуси" -----
-    // 1) Радіус Землі приблизно 6378 км
-    const R_EARTH = 6378137; // у метрах
-
-    // Переводимо зміщення в метрах у зміну широти (deg):
+    const R_EARTH = 6378137;
     function metersToLatitudeDegrees(meters) {
       return (meters / R_EARTH) * (180 / Math.PI);
     }
-    // Переводимо зміщення в метрах у зміну довготи (deg) з урахуванням широти:
     function metersToLongitudeDegrees(meters, latitude) {
-      // 1 градус довготи = (π/180) * R_EARTH * cos(lat)
-      // Тож: Δlon = meters / (R_EARTH * cos(lat) * π/180)
       return (meters / (R_EARTH * Math.cos(latitude * Math.PI / 180))) * (180 / Math.PI);
     }
 
-    // 6) Основна логіка: отримуємо поточні координати користувача, призначаємо двом моделям атрибути gps-entity-place
-    function initGeoAR() {
-      if (!navigator.geolocation) {
-        document.getElementById('status').innerText = 'Геолокація не підтримується вашим браузером';
-        return;
-      }
+    function placeModels(lat, lon) {
+      const deltaLon = metersToLongitudeDegrees(5, lat);
+      const deltaLat = metersToLatitudeDegrees(0);
 
+      const leftLat = lat + deltaLat;
+      const leftLon = lon - deltaLon;
+
+      const rightLat = lat + deltaLat;
+      const rightLon = lon + deltaLon;
+
+      const container = document.getElementById('model-container');
+
+      const modelLeft = document.createElement('a-entity');
+      modelLeft.setAttribute('gps-entity-place', `latitude: ${leftLat}; longitude: ${leftLon}`);
+      modelLeft.setAttribute('gltf-model', 'https://cdn.jsdelivr.net/gh/KhronosGroup/glTF-Sample-Models@master/2.0/Duck/glTF/Duck.gltf');
+      modelLeft.setAttribute('scale', '0.5 0.5 0.5');
+      modelLeft.setAttribute('rotation', '0 180 0');
+      modelLeft.setAttribute('position', '-1 0 -3');
+      container.appendChild(modelLeft);
+
+      const modelRight = document.createElement('a-entity');
+      modelRight.setAttribute('gps-entity-place', `latitude: ${rightLat}; longitude: ${rightLon}`);
+      modelRight.setAttribute('gltf-model', 'https://cdn.jsdelivr.net/gh/KhronosGroup/glTF-Sample-Models@master/2.0/CesiumMan/glTF/CesiumMan.gltf');
+      modelRight.setAttribute('scale', '0.3 0.3 0.3');
+      modelRight.setAttribute('rotation', '0 180 0');
+      modelRight.setAttribute('position', '1 0 -3');
+      container.appendChild(modelRight);
+
+      document.getElementById('instructions').innerText = 'Моделі завантажено після розпізнавання маркера.';
+    }
+
+    // Чекаємо на розпізнавання маркера та тоді завантажуємо геомоделі
+    document.getElementById('mind-marker').addEventListener('markerFound', () => {
       navigator.geolocation.getCurrentPosition(
         (position) => {
-          const userLat = position.coords.latitude;
-          const userLon = position.coords.longitude;
-          document.getElementById('instructions').innerText = 'Геолокацію знайдено. Завантажуємо моделі...';
-          document.getElementById('status').innerText = `Ваша позиція: ${userLat.toFixed(6)}, ${userLon.toFixed(6)}`;
-
-          // Відстань (в метрах), на яку змістимо модель вліво/вправо
-          const offsetMeters = 5; // 5 метрів
-
-          // Обчислюємо "ліворуч" (захід) та "праворуч" (схід) від поточних coords
-          const deltaLon = metersToLongitudeDegrees(offsetMeters, userLat);
-          const deltaLat = metersToLatitudeDegrees(0); // нуль, бо зміщення лише по довготі
-
-          // КООРДИНАТИ ЛІВОРУЧ (захід)
-          const leftLat = userLat + deltaLat;
-          const leftLon = userLon - deltaLon;
-
-          // КООРДИНАТИ ПРАВОРУЧ (схід)
-          const rightLat = userLat + deltaLat;
-          const rightLon = userLon + deltaLon;
-
-          // 7) Присвоюємо атрибути gps-entity-place обом моделям
-          const modelLeft = document.getElementById('model-left');
-          modelLeft.setAttribute('gps-entity-place', `latitude: ${leftLat}; longitude: ${leftLon};`);
-          modelLeft.addEventListener('loaded', () => {
-            console.log('Модель LEFT завантажена та розташована за:', leftLat, leftLon);
-          });
-
-          const modelRight = document.getElementById('model-right');
-          modelRight.setAttribute('gps-entity-place', `latitude: ${rightLat}; longitude: ${rightLon};`);
-          modelRight.addEventListener('loaded', () => {
-            console.log('Модель RIGHT завантажена та розташована за:', rightLat, rightLon);
-          });
-
-          document.getElementById('instructions').innerText = 'Наведіть камеру на місцевість — моделі повинні з’явитися зліва та справа';
+          const lat = position.coords.latitude;
+          const lon = position.coords.longitude;
+          document.getElementById('status').innerText = `Ваша позиція: ${lat.toFixed(6)}, ${lon.toFixed(6)}`;
+          placeModels(lat, lon);
         },
         (err) => {
-          document.getElementById('status').innerText = 'Помилка визначення геолокації: ' + err.message;
+          document.getElementById('status').innerText = 'Помилка геолокації: ' + err.message;
         },
         {
           enableHighAccuracy: true,
@@ -141,11 +120,6 @@
           timeout: 10000
         }
       );
-    }
-
-    // Стартуємо після завантаження сторінки
-    window.addEventListener('load', () => {
-      initGeoAR();
     });
   </script>
 </body>
