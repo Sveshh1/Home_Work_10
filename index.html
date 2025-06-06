@@ -28,19 +28,18 @@
 <body>
   <div id="instructions">Наведіть камеру на маркер NBA</div>
 
-  <!-- MindAR + Three.js -->
   <script src="https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.1.4/dist/mindar-image-three.prod.js"></script>
 
   <script>
-    const inclineAngle = Math.PI / 6; // 30°
+    const inclineAngle = Math.PI / 6;
     const gravity = 0.003;
     const ballRadius = 0.1;
     let velocity = new THREE.Vector3();
 
     let mindarThree, scene, camera, renderer;
-    let ball, plane, anchor;
-    let modelsAdded = false;
+    let anchor, plane, ball;
+    let isModelAdded = false;
 
     async function start() {
       mindarThree = new window.MINDAR.IMAGE.MindARThree({
@@ -57,10 +56,10 @@
 
       anchor = mindarThree.addAnchor(0);
 
-      // Додаємо обʼєкти тільки після розпізнавання маркера
+      // Додаємо моделі після знаходження маркера
       anchor.onTargetFound = () => {
-        if (!modelsAdded) {
-          // Похила площина
+        if (!isModelAdded) {
+          // Площина
           const planeGeometry = new THREE.PlaneGeometry(2, 2);
           const planeMaterial = new THREE.MeshStandardMaterial({ color: 0x888888, side: THREE.DoubleSide });
           plane = new THREE.Mesh(planeGeometry, planeMaterial);
@@ -75,7 +74,7 @@
           anchor.group.add(ball);
 
           velocity.set(0.005, 0, 0);
-          modelsAdded = true;
+          isModelAdded = true;
 
           document.getElementById('instructions').innerText = 'Маркер знайдено!';
         }
@@ -90,7 +89,7 @@
     }
 
     function animate() {
-      if (anchor && anchor.group.visible && ball) {
+      if (anchor?.group.visible && ball) {
         const accelY = gravity * Math.sin(inclineAngle);
         velocity.y -= accelY;
 
