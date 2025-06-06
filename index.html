@@ -36,59 +36,48 @@
       z-index: 1;
     }
   </style>
-  <!-- 1) Підключаємо A-Frame -->
   <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
-  <!-- 2) Підключаємо AR.js з GPS-підтримкою -->
   <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js/aframe/build/aframe-ar-nft.min.js"></script>
 </head>
 <body>
   <div id="instructions">Очікуємо позицію... будь ласка, дозвольте доступ до геолокації</div>
   <div id="status"></div>
 
-  <!-- 3) Сама AR.js-сцена -->
   <a-scene
     vr-mode-ui="enabled: false"
     embedded
     arjs="sourceType: webcam; gpsMinDistance: 1; debugUIEnabled: false;"
   >
-    <!-- 4) GPS-камера — отримуємо позицію користувача автоматично -->
     <a-entity gps-camera rotation-reader></a-entity>
 
-    <!-- 5) Дві умовні 3D-моделі, пізніше буде виставлено коректні lat/long -->
     <a-entity id="model-left"
               gltf-model="https://cdn.jsdelivr.net/gh/KhronosGroup/glTF-Sample-Models@master/2.0/Duck/glTF/Duck.gltf"
               scale="0.5 0.5 0.5"
               rotation="0 180 0"
-              position="-1 0 -3">
-      <!-- Атрибут gps-entity-place буде призначений скриптом нижче -->
+              position="-1 0 -3"
+              animation="property: rotation; to: 0 360 0; loop: true; dur: 5000; easing: linear">
     </a-entity>
 
     <a-entity id="model-right"
               gltf-model="https://cdn.jsdelivr.net/gh/KhronosGroup/glTF-Sample-Models@master/2.0/CesiumMan/glTF/CesiumMan.gltf"
               scale="0.3 0.3 0.3"
               rotation="0 180 0"
-              position="1 0 -3">
-      <!-- Атрибут gps-entity-place буде призначений скриптом нижче -->
+              position="1 0 -3"
+              animation="property: rotation; to: 0 360 0; loop: true; dur: 5000; easing: linear">
     </a-entity>
   </a-scene>
 
   <script>
-    // ----- Додаткові утиліти для обчислення "метрів у градуси" -----
-    // 1) Радіус Землі приблизно 6378 км
-    const R_EARTH = 6378137; // у метрах
+    const R_EARTH = 6378137;
 
-    // Переводимо зміщення в метрах у зміну широти (deg):
     function metersToLatitudeDegrees(meters) {
       return (meters / R_EARTH) * (180 / Math.PI);
     }
-    // Переводимо зміщення в метрах у зміну довготи (deg) з урахуванням широти:
+
     function metersToLongitudeDegrees(meters, latitude) {
-      // 1 градус довготи = (π/180) * R_EARTH * cos(lat)
-      // Тож: Δlon = meters / (R_EARTH * cos(lat) * π/180)
       return (meters / (R_EARTH * Math.cos(latitude * Math.PI / 180))) * (180 / Math.PI);
     }
 
-    // 6) Основна логіка: отримуємо поточні координати користувача, призначаємо двом моделям атрибути gps-entity-place
     function initGeoAR() {
       if (!navigator.geolocation) {
         document.getElementById('status').innerText = 'Геолокація не підтримується вашим браузером';
@@ -102,22 +91,16 @@
           document.getElementById('instructions').innerText = 'Геолокацію знайдено. Завантажуємо моделі...';
           document.getElementById('status').innerText = `Ваша позиція: ${userLat.toFixed(6)}, ${userLon.toFixed(6)}`;
 
-          // Відстань (в метрах), на яку змістимо модель вліво/вправо
-          const offsetMeters = 5; // 5 метрів
-
-          // Обчислюємо "ліворуч" (захід) та "праворуч" (схід) від поточних coords
+          const offsetMeters = 5;
           const deltaLon = metersToLongitudeDegrees(offsetMeters, userLat);
-          const deltaLat = metersToLatitudeDegrees(0); // нуль, бо зміщення лише по довготі
+          const deltaLat = metersToLatitudeDegrees(0);
 
-          // КООРДИНАТИ ЛІВОРУЧ (захід)
           const leftLat = userLat + deltaLat;
           const leftLon = userLon - deltaLon;
 
-          // КООРДИНАТИ ПРАВОРУЧ (схід)
           const rightLat = userLat + deltaLat;
           const rightLon = userLon + deltaLon;
 
-          // 7) Присвоюємо атрибути gps-entity-place обом моделям
           const modelLeft = document.getElementById('model-left');
           modelLeft.setAttribute('gps-entity-place', `latitude: ${leftLat}; longitude: ${leftLon};`);
           modelLeft.addEventListener('loaded', () => {
@@ -130,7 +113,7 @@
             console.log('Модель RIGHT завантажена та розташована за:', rightLat, rightLon);
           });
 
-          document.getElementById('instructions').innerText = 'Наведіть камеру на місцевість — моделі повинні з’явитися зліва та справа';
+          document.getElementById('instructions').innerText = 'Наведіть камеру — моделі мають з’явитись зліва і справа';
         },
         (err) => {
           document.getElementById('status').innerText = 'Помилка визначення геолокації: ' + err.message;
@@ -143,7 +126,6 @@
       );
     }
 
-    // Стартуємо після завантаження сторінки
     window.addEventListener('load', () => {
       initGeoAR();
     });
