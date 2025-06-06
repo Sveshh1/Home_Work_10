@@ -4,11 +4,8 @@
   <meta charset="UTF-8" />
   <title>Гумова кулька з MindAR</title>
   <style>
-    html, body {
+    body {
       margin: 0;
-      padding: 0;
-      width: 100%;
-      height: 100%;
       overflow: hidden;
       background: black;
     }
@@ -26,32 +23,23 @@
       user-select: none;
       z-index: 1;
     }
-
-    body > canvas, body > video {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100% !important;
-      height: 100% !important;
-      object-fit: cover;
-    }
   </style>
 </head>
 <body>
   <div id="instructions">Наведіть камеру на маркер NBA</div>
 
+  <!-- MindAR + Three.js (без module) -->
   <script src="https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.1.4/dist/mindar-image-three.prod.js"></script>
 
   <script>
-    const inclineAngle = Math.PI / 6;
+    const inclineAngle = Math.PI / 6; // 30°
     const gravity = 0.003;
     const ballRadius = 0.1;
     let velocity = new THREE.Vector3();
 
     let mindarThree, scene, camera, renderer;
-    let anchor, plane, ball;
-    let isModelAdded = false;
+    let ball, plane, anchor;
 
     async function start() {
       mindarThree = new window.MINDAR.IMAGE.MindARThree({
@@ -63,42 +51,35 @@
       renderer.setClearColor(0x000000, 0);
       renderer.xr.enabled = false;
 
+      // Світло
       const light = new THREE.HemisphereLight(0xffffff, 0x444444, 1.2);
       scene.add(light);
 
+      // Прив’язка до маркера
       anchor = mindarThree.addAnchor(0);
 
-      anchor.onTargetFound = () => {
-        if (!isModelAdded) {
-          const planeGeometry = new THREE.PlaneGeometry(2, 2);
-          const planeMaterial = new THREE.MeshStandardMaterial({ color: 0x888888, side: THREE.DoubleSide });
-          plane = new THREE.Mesh(planeGeometry, planeMaterial);
-          plane.rotation.x = -inclineAngle;
-          anchor.group.add(plane);
+      // Похила площина
+      const planeGeometry = new THREE.PlaneGeometry(2, 2);
+      const planeMaterial = new THREE.MeshStandardMaterial({ color: 0x888888, side: THREE.DoubleSide });
+      plane = new THREE.Mesh(planeGeometry, planeMaterial);
+      plane.rotation.x = -inclineAngle;
+      anchor.group.add(plane);
 
-          const ballGeometry = new THREE.SphereGeometry(ballRadius, 32, 16);
-          const ballMaterial = new THREE.MeshStandardMaterial({ color: 0xff0000 });
-          ball = new THREE.Mesh(ballGeometry, ballMaterial);
-          ball.position.set(-0.9, ballRadius + 0.01, 0);
-          anchor.group.add(ball);
+      // Кулька
+      const ballGeometry = new THREE.SphereGeometry(ballRadius, 32, 16);
+      const ballMaterial = new THREE.MeshStandardMaterial({ color: 0xff0000 });
+      ball = new THREE.Mesh(ballGeometry, ballMaterial);
+      ball.position.set(-0.9, ballRadius + 0.01, 0);
+      anchor.group.add(ball);
 
-          velocity.set(0.005, 0, 0);
-          isModelAdded = true;
-
-          document.getElementById('instructions').innerText = 'Маркер знайдено!';
-        }
-      };
-
-      anchor.onTargetLost = () => {
-        document.getElementById('instructions').innerText = 'Наведіть камеру на маркер NBA';
-      };
+      velocity.set(0.005, 0, 0);
 
       await mindarThree.start();
       renderer.setAnimationLoop(animate);
     }
 
     function animate() {
-      if (anchor?.group.visible && ball) {
+      if (anchor && anchor.group.visible) {
         const accelY = gravity * Math.sin(inclineAngle);
         velocity.y -= accelY;
 
