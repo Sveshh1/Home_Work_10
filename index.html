@@ -4,8 +4,11 @@
   <meta charset="UTF-8" />
   <title>Гумова кулька з MindAR</title>
   <style>
-    body {
+    html, body {
       margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
       overflow: hidden;
       background: black;
     }
@@ -22,6 +25,15 @@
       border-radius: 6px;
       user-select: none;
       z-index: 1;
+    }
+
+    body > canvas, body > video {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100% !important;
+      height: 100% !important;
+      object-fit: cover;
     }
   </style>
 </head>
@@ -56,17 +68,14 @@
 
       anchor = mindarThree.addAnchor(0);
 
-      // Додаємо моделі після знаходження маркера
       anchor.onTargetFound = () => {
         if (!isModelAdded) {
-          // Площина
           const planeGeometry = new THREE.PlaneGeometry(2, 2);
           const planeMaterial = new THREE.MeshStandardMaterial({ color: 0x888888, side: THREE.DoubleSide });
           plane = new THREE.Mesh(planeGeometry, planeMaterial);
           plane.rotation.x = -inclineAngle;
           anchor.group.add(plane);
 
-          // Кулька
           const ballGeometry = new THREE.SphereGeometry(ballRadius, 32, 16);
           const ballMaterial = new THREE.MeshStandardMaterial({ color: 0xff0000 });
           ball = new THREE.Mesh(ballGeometry, ballMaterial);
