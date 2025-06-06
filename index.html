@@ -1,106 +1,36 @@
 <!DOCTYPE html>
-<html lang="uk">
-<head>
-  <meta charset="UTF-8" />
-  <title>Гумова кулька з MindAR</title>
-  <style>
-    body {
-      margin: 0;
-      overflow: hidden;
-      background: black;
-    }
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Геокоординатна AR сцена</title>
+    <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+    <script src="https://unpkg.com/ar.js@3.4.2/aframe/build/aframe-ar-nft.js"></script>
+    <script src="https://unpkg.com/aframe-gps-camera@1.8.2/dist/aframe-gps-camera.min.js"></script>
+    <script src="https://unpkg.com/aframe-gps-entity-place@1.8.2/dist/aframe-gps-entity-place.min.js"></script>
+  </head>
+  <body style="margin: 0; overflow: hidden;">
+    <a-scene
+      vr-mode-ui="enabled: false"
+      embedded
+      arjs="sourceType: webcam; debugUIEnabled: false;"
+    >
+      <!-- Камера з GPS -->
+      <a-camera gps-camera rotation-reader></a-camera>
 
-    #instructions {
-      position: absolute;
-      top: 10px;
-      left: 50%;
-      transform: translateX(-50%);
-      color: white;
-      font-family: sans-serif;
-      background: rgba(0, 0, 0, 0.5);
-      padding: 8px 12px;
-      border-radius: 6px;
-      user-select: none;
-      z-index: 1;
-    }
-  </style>
-</head>
-<body>
-  <div id="instructions">Наведіть камеру на маркер NBA</div>
+      <!-- Модель ліворуч -->
+      <a-box
+        gps-entity-place="latitude: 50.4501; longitude: 30.5234;"
+        scale="2 2 2"
+        position="0 0 0"
+        material="color: red"
+      ></a-box>
 
-  <!-- MindAR + Three.js (без module) -->
-  <script src="https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.1.4/dist/mindar-image-three.prod.js"></script>
-
-  <script>
-    const inclineAngle = Math.PI / 6; // 30°
-    const gravity = 0.003;
-    const ballRadius = 0.1;
-    let velocity = new THREE.Vector3();
-
-    let mindarThree, scene, camera, renderer;
-    let ball, plane, anchor;
-
-    async function start() {
-      mindarThree = new window.MINDAR.IMAGE.MindARThree({
-        container: document.body,
-        imageTargetSrc: './marker.mind',
-      });
-
-      ({ renderer, scene, camera } = mindarThree);
-      renderer.setClearColor(0x000000, 0);
-      renderer.xr.enabled = false;
-
-      // Світло
-      const light = new THREE.HemisphereLight(0xffffff, 0x444444, 1.2);
-      scene.add(light);
-
-      // Прив’язка до маркера
-      anchor = mindarThree.addAnchor(0);
-
-      // Похила площина
-      const planeGeometry = new THREE.PlaneGeometry(2, 2);
-      const planeMaterial = new THREE.MeshStandardMaterial({ color: 0x888888, side: THREE.DoubleSide });
-      plane = new THREE.Mesh(planeGeometry, planeMaterial);
-      plane.rotation.x = -inclineAngle;
-      anchor.group.add(plane);
-
-      // Кулька
-      const ballGeometry = new THREE.SphereGeometry(ballRadius, 32, 16);
-      const ballMaterial = new THREE.MeshStandardMaterial({ color: 0xff0000 });
-      ball = new THREE.Mesh(ballGeometry, ballMaterial);
-      ball.position.set(-0.9, ballRadius + 0.01, 0);
-      anchor.group.add(ball);
-
-      velocity.set(0.005, 0, 0);
-
-      await mindarThree.start();
-      renderer.setAnimationLoop(animate);
-    }
-
-    function animate() {
-      if (anchor && anchor.group.visible) {
-        const accelY = gravity * Math.sin(inclineAngle);
-        velocity.y -= accelY;
-
-        ball.position.x += velocity.x;
-        ball.position.y += velocity.y;
-
-        if (ball.position.y <= ballRadius) {
-          ball.position.y = ballRadius;
-          velocity.y = -velocity.y * 0.7;
-        }
-
-        if (ball.position.x > 1) {
-          ball.position.x = -0.9;
-          velocity.set(0.005, 0, 0);
-        }
-      }
-
-      renderer.render(scene, camera);
-    }
-
-    start();
-  </script>
-</body>
+      <!-- Модель праворуч -->
+      <a-sphere
+        gps-entity-place="latitude: 50.4501; longitude: 30.5236;"
+        scale="2 2 2"
+        material="color: blue"
+      ></a-sphere>
+    </a-scene>
+  </body>
 </html>
