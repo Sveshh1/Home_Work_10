@@ -2,14 +2,13 @@
 <html lang="uk">
 <head>
   <meta charset="UTF-8" />
-  <title>Гумова кулька з MindAR</title>
+  <title>Геокоординатна AR: дві моделі ліворуч та праворуч</title>
   <style>
     body {
       margin: 0;
       overflow: hidden;
-      background: black;
+      background: #000;
     }
-
     #instructions {
       position: absolute;
       top: 10px;
@@ -23,84 +22,131 @@
       user-select: none;
       z-index: 1;
     }
+    #status {
+      position: absolute;
+      bottom: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: #0f0;
+      font-family: sans-serif;
+      background: rgba(0, 0, 0, 0.5);
+      padding: 6px 10px;
+      border-radius: 6px;
+      user-select: none;
+      z-index: 1;
+    }
   </style>
+  <!-- 1) Підключаємо A-Frame -->
+  <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+  <!-- 2) Підключаємо AR.js з GPS-підтримкою -->
+  <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js/aframe/build/aframe-ar-nft.min.js"></script>
 </head>
 <body>
-  <div id="instructions">Наведіть камеру на маркер NBA</div>
+  <div id="instructions">Очікуємо позицію... будь ласка, дозвольте доступ до геолокації</div>
+  <div id="status"></div>
 
-  <!-- MindAR + Three.js (без module) -->
-  <script src="https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.1.4/dist/mindar-image-three.prod.js"></script>
+  <!-- 3) Сама AR.js-сцена -->
+  <a-scene
+    vr-mode-ui="enabled: false"
+    embedded
+    arjs="sourceType: webcam; gpsMinDistance: 1; debugUIEnabled: false;"
+  >
+    <!-- 4) GPS-камера — отримуємо позицію користувача автоматично -->
+    <a-entity gps-camera rotation-reader></a-entity>
+
+    <!-- 5) Дві умовні 3D-моделі, пізніше буде виставлено коректні lat/long -->
+    <a-entity id="model-left"
+              gltf-model="https://cdn.jsdelivr.net/gh/KhronosGroup/glTF-Sample-Models@master/2.0/Duck/glTF/Duck.gltf"
+              scale="0.5 0.5 0.5"
+              rotation="0 180 0"
+              position="-1 0 -3">
+      <!-- Атрибут gps-entity-place буде призначений скриптом нижче -->
+    </a-entity>
+
+    <a-entity id="model-right"
+              gltf-model="https://cdn.jsdelivr.net/gh/KhronosGroup/glTF-Sample-Models@master/2.0/CesiumMan/glTF/CesiumMan.gltf"
+              scale="0.3 0.3 0.3"
+              rotation="0 180 0"
+              position="1 0 -3">
+      <!-- Атрибут gps-entity-place буде призначений скриптом нижче -->
+    </a-entity>
+  </a-scene>
 
   <script>
-    const inclineAngle = Math.PI / 6; // 30°
-    const gravity = 0.003;
-    const ballRadius = 0.1;
-    let velocity = new THREE.Vector3();
+    // ----- Додаткові утиліти для обчислення "метрів у градуси" -----
+    // 1) Радіус Землі приблизно 6378 км
+    const R_EARTH = 6378137; // у метрах
 
-    let mindarThree, scene, camera, renderer;
-    let ball, plane, anchor;
-
-    async function start() {
-      mindarThree = new window.MINDAR.IMAGE.MindARThree({
-        container: document.body,
-        imageTargetSrc: './marker.mind',
-      });
-
-      ({ renderer, scene, camera } = mindarThree);
-      renderer.setClearColor(0x000000, 0);
-      renderer.xr.enabled = false;
-
-      // Світло
-      const light = new THREE.HemisphereLight(0xffffff, 0x444444, 1.2);
-      scene.add(light);
-
-      // Прив’язка до маркера
-      anchor = mindarThree.addAnchor(0);
-
-      // Похила площина
-      const planeGeometry = new THREE.PlaneGeometry(2, 2);
-      const planeMaterial = new THREE.MeshStandardMaterial({ color: 0x888888, side: THREE.DoubleSide });
-      plane = new THREE.Mesh(planeGeometry, planeMaterial);
-      plane.rotation.x = -inclineAngle;
-      anchor.group.add(plane);
-
-      // Кулька
-      const ballGeometry = new THREE.SphereGeometry(ballRadius, 32, 16);
-      const ballMaterial = new THREE.MeshStandardMaterial({ color: 0xff0000 });
-      ball = new THREE.Mesh(ballGeometry, ballMaterial);
-      ball.position.set(-0.9, ballRadius + 0.01, 0);
-      anchor.group.add(ball);
-
-      velocity.set(0.005, 0, 0);
-
-      await mindarThree.start();
-      renderer.setAnimationLoop(animate);
+    // Переводимо зміщення в метрах у зміну широти (deg):
+    function metersToLatitudeDegrees(meters) {
+      return (meters / R_EARTH) * (180 / Math.PI);
+    }
+    // Переводимо зміщення в метрах у зміну довготи (deg) з урахуванням широти:
+    function metersToLongitudeDegrees(meters, latitude) {
+      // 1 градус довготи = (π/180) * R_EARTH * cos(lat)
+      // Тож: Δlon = meters / (R_EARTH * cos(lat) * π/180)
+      return (meters / (R_EARTH * Math.cos(latitude * Math.PI / 180))) * (180 / Math.PI);
     }
 
-    function animate() {
-      if (anchor && anchor.group.visible) {
-        const accelY = gravity * Math.sin(inclineAngle);
-        velocity.y -= accelY;
-
-        ball.position.x += velocity.x;
-        ball.position.y += velocity.y;
-
-        if (ball.position.y <= ballRadius) {
-          ball.position.y = ballRadius;
-          velocity.y = -velocity.y * 0.7;
-        }
-
-        if (ball.position.x > 1) {
-          ball.position.x = -0.9;
-          velocity.set(0.005, 0, 0);
-        }
+    // 6) Основна логіка: отримуємо поточні координати користувача, призначаємо двом моделям атрибути gps-entity-place
+    function initGeoAR() {
+      if (!navigator.geolocation) {
+        document.getElementById('status').innerText = 'Геолокація не підтримується вашим браузером';
+        return;
       }
 
-      renderer.render(scene, camera);
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const userLat = position.coords.latitude;
+          const userLon = position.coords.longitude;
+          document.getElementById('instructions').innerText = 'Геолокацію знайдено. Завантажуємо моделі...';
+          document.getElementById('status').innerText = Ваша позиція: ${userLat.toFixed(6)}, ${userLon.toFixed(6)};
+
+          // Відстань (в метрах), на яку змістимо модель вліво/вправо
+          const offsetMeters = 5; // 5 метрів
+
+          // Обчислюємо "ліворуч" (захід) та "праворуч" (схід) від поточних coords
+          const deltaLon = metersToLongitudeDegrees(offsetMeters, userLat);
+          const deltaLat = metersToLatitudeDegrees(0); // нуль, бо зміщення лише по довготі
+
+          // КООРДИНАТИ ЛІВОРУЧ (захід)
+          const leftLat = userLat + deltaLat;
+          const leftLon = userLon - deltaLon;
+
+          // КООРДИНАТИ ПРАВОРУЧ (схід)
+          const rightLat = userLat + deltaLat;
+          const rightLon = userLon + deltaLon;
+
+          // 7) Присвоюємо атрибути gps-entity-place обом моделям
+          const modelLeft = document.getElementById('model-left');
+          modelLeft.setAttribute('gps-entity-place', latitude: ${leftLat}; longitude: ${leftLon};);
+          modelLeft.addEventListener('loaded', () => {
+            console.log('Модель LEFT завантажена та розташована за:', leftLat, leftLon);
+          });
+
+          const modelRight = document.getElementById('model-right');
+          modelRight.setAttribute('gps-entity-place', latitude: ${rightLat}; longitude: ${rightLon};);
+          modelRight.addEventListener('loaded', () => {
+            console.log('Модель RIGHT завантажена та розташована за:', rightLat, rightLon);
+          });
+
+          document.getElementById('instructions').innerText = 'Наведіть камеру на місцевість — моделі повинні з’явитися зліва та справа';
+        },
+        (err) => {
+          document.getElementById('status').innerText = 'Помилка визначення геолокації: ' + err.message;
+        },
+        {
+          enableHighAccuracy: true,
+          maximumAge: 0,
+          timeout: 10000
+        }
+      );
     }
 
-    start();
+    // Стартуємо після завантаження сторінки
+    window.addEventListener('load', () => {
+      initGeoAR();
+    });
   </script>
 </body>
 </html>
