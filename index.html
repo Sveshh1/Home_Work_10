@@ -2,133 +2,81 @@
 <html lang="uk">
 <head>
   <meta charset="UTF-8" />
-  <title>Геокоординатна AR: дві моделі ліворуч та праворуч</title>
+  <title>GPS AR тест</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- A-Frame -->
+  <script src="https://aframe.io/releases/1.2.0/aframe.min.js"></script>
+
+  <!-- Сучасна версія AR.js з підтримкою GPS -->
+  <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js/aframe/build/aframe-ar-nft.js"></script>
+
   <style>
-    body {
-      margin: 0;
-      overflow: hidden;
-      background: #000;
-    }
-    #instructions {
-      position: absolute;
-      top: 10px;
-      left: 50%;
-      transform: translateX(-50%);
-      color: white;
-      font-family: sans-serif;
-      background: rgba(0, 0, 0, 0.5);
-      padding: 8px 12px;
-      border-radius: 6px;
-      user-select: none;
-      z-index: 1;
-    }
-    #status {
-      position: absolute;
-      bottom: 10px;
-      left: 50%;
-      transform: translateX(-50%);
-      color: #0f0;
-      font-family: sans-serif;
-      background: rgba(0, 0, 0, 0.5);
-      padding: 6px 10px;
-      border-radius: 6px;
-      user-select: none;
-      z-index: 1;
+    body, html { margin: 0; padding: 0; overflow: hidden; height: 100%; }
+    #loading {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.8); color: white;
+      display: flex; justify-content: center; align-items: center;
+      font-size: 1.5em; z-index: 9999;
     }
   </style>
-  <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js/aframe/build/aframe-ar-nft.min.js"></script>
 </head>
 <body>
-  <div id="instructions">Очікуємо позицію... будь ласка, дозвольте доступ до геолокації</div>
-  <div id="status"></div>
+  <div id="loading">Завантаження... Будь ласка, дозволь доступ до камери та GPS</div>
 
   <a-scene
-    vr-mode-ui="enabled: false"
     embedded
-    arjs="sourceType: webcam; gpsMinDistance: 1; debugUIEnabled: false;"
+    vr-mode-ui="enabled: false"
+    arjs="sourceType: webcam; gpsMinAccuracy: 100; debugUIEnabled: false;"
   >
-    <a-entity gps-camera rotation-reader></a-entity>
+    <!-- Камера з GPS -->
+    <a-camera gps-camera rotation-reader></a-camera>
 
-    <a-entity id="model-left"
-              gltf-model="https://cdn.jsdelivr.net/gh/KhronosGroup/glTF-Sample-Models@master/2.0/Duck/glTF/Duck.gltf"
-              scale="0.5 0.5 0.5"
-              rotation="0 180 0"
-              position="-1 0 -3"
-              animation="property: rotation; to: 0 360 0; loop: true; dur: 5000; easing: linear">
-    </a-entity>
+    <!-- Об'єкти, прив'язані до GPS -->
+    <a-box
+      color="blue"
+      scale="2 2 2"
+      gps-entity-place="latitude: 47.9085; longitude: 33.4118"
+      position="0 1 0"
+    ></a-box>
 
-    <a-entity id="model-right"
-              gltf-model="https://cdn.jsdelivr.net/gh/KhronosGroup/glTF-Sample-Models@master/2.0/CesiumMan/glTF/CesiumMan.gltf"
-              scale="0.3 0.3 0.3"
-              rotation="0 180 0"
-              position="1 0 -3"
-              animation="property: rotation; to: 0 360 0; loop: true; dur: 5000; easing: linear">
-    </a-entity>
+    <a-sphere
+      color="red"
+      scale="2 2 2"
+      gps-entity-place="latitude: 47.9084; longitude: 33.4122"
+      position="0 1 0"
+    ></a-sphere>
   </a-scene>
 
   <script>
-    const R_EARTH = 6378137;
+    const loading = document.getElementById('loading');
+    const camera = document.querySelector('[gps-camera]');
 
-    function metersToLatitudeDegrees(meters) {
-      return (meters / R_EARTH) * (180 / Math.PI);
-    }
-
-    function metersToLongitudeDegrees(meters, latitude) {
-      return (meters / (R_EARTH * Math.cos(latitude * Math.PI / 180))) * (180 / Math.PI);
-    }
-
-    function initGeoAR() {
-      if (!navigator.geolocation) {
-        document.getElementById('status').innerText = 'Геолокація не підтримується вашим браузером';
-        return;
+    // Фікс: Якщо GPS не спрацьовує, прибрати заставку через 10 секунд
+    setTimeout(() => {
+      if (loading.style.display !== 'none') {
+        loading.innerText = 'GPS не отримано. Спробуйте перезавантажити сторінку або перевірте дозволи.';
       }
+    }, 10000);
 
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const userLat = position.coords.latitude;
-          const userLon = position.coords.longitude;
-          document.getElementById('instructions').innerText = 'Геолокацію знайдено. Завантажуємо моделі...';
-          document.getElementById('status').innerText = `Ваша позиція: ${userLat.toFixed(6)}, ${userLon.toFixed(6)}`;
-
-          const offsetMeters = 5;
-          const deltaLon = metersToLongitudeDegrees(offsetMeters, userLat);
-          const deltaLat = metersToLatitudeDegrees(0);
-
-          const leftLat = userLat + deltaLat;
-          const leftLon = userLon - deltaLon;
-
-          const rightLat = userLat + deltaLat;
-          const rightLon = userLon + deltaLon;
-
-          const modelLeft = document.getElementById('model-left');
-          modelLeft.setAttribute('gps-entity-place', `latitude: ${leftLat}; longitude: ${leftLon};`);
-          modelLeft.addEventListener('loaded', () => {
-            console.log('Модель LEFT завантажена та розташована за:', leftLat, leftLon);
-          });
-
-          const modelRight = document.getElementById('model-right');
-          modelRight.setAttribute('gps-entity-place', `latitude: ${rightLat}; longitude: ${rightLon};`);
-          modelRight.addEventListener('loaded', () => {
-            console.log('Модель RIGHT завантажена та розташована за:', rightLat, rightLon);
-          });
-
-          document.getElementById('instructions').innerText = 'Наведіть камеру — моделі мають з’явитись зліва і справа';
-        },
-        (err) => {
-          document.getElementById('status').innerText = 'Помилка визначення геолокації: ' + err.message;
-        },
-        {
-          enableHighAccuracy: true,
-          maximumAge: 0,
-          timeout: 10000
-        }
-      );
-    }
-
-    window.addEventListener('load', () => {
-      initGeoAR();
+    camera.addEventListener('gps-camera-update-position', (e) => {
+      loading.style.display = 'none';
+      console.log('GPS позиція отримана:', e.detail.position);
     });
+
+    camera.addEventListener('gps-camera-error', (e) => {
+      loading.innerText = 'Не вдалося отримати GPS. Дозвольте доступ до геолокації.';
+      console.error('GPS error:', e);
+    });
+
+    // Ручна перевірка дозволу на геолокацію
+    navigator.geolocation.getCurrentPosition(
+      pos => console.log("Ручна перевірка позиції:", pos),
+      err => {
+        loading.innerText = 'Браузер заблокував геолокацію.';
+        console.error("Геолокація не спрацювала:", err);
+      }
+    );
   </script>
 </body>
 </html>
